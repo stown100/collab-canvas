@@ -15,6 +15,7 @@ interface BoardState {
   setBoards: (boards: Board[]) => void;
   addBoard: (board: Board) => void;
   removeBoard: (id: string) => void;
+  updateBoard: (id: string, patch: Partial<Board>) => void;
 }
 
 export const useBoardStore = create<BoardState>((set) => ({
@@ -22,4 +23,6 @@ export const useBoardStore = create<BoardState>((set) => ({
   setBoards: (boards) => set({ boards }),
   addBoard: (board) => set((state) => ({ boards: [board, ...state.boards] })),
   removeBoard: (id) => set((state) => ({ boards: state.boards.filter((b) => b.id !== id) })),
+  updateBoard: (id, patch) =>
+    set((state) => ({ boards: state.boards.map((b) => (b.id === id ? { ...b, ...patch } : b)) })),
 }));

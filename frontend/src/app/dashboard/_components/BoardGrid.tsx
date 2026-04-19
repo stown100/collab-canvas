@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -12,8 +13,10 @@ import Avatar from '@mui/material/Avatar';
 import AddIcon from '@mui/icons-material/Add';
 import GridViewIcon from '@mui/icons-material/GridView';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useBoards, getBoardColor } from '@/features/boards/hooks/useBoards';
 import CreateBoardDialog from '@/features/boards/ui/CreateBoardDialog';
+import EditBoardDialog from '@/features/boards/ui/EditBoardDialog';
 import DeleteConfirmPopover from '@/features/boards/ui/DeleteConfirmPopover';
 
 function formatDate(iso: string): string {
@@ -21,10 +24,12 @@ function formatDate(iso: string): string {
 }
 
 export default function BoardGrid() {
-  const { boards, loading, createBoard, deleteBoard } = useBoards();
+  const router = useRouter();
+  const { boards, loading, createBoard, editBoard, deleteBoard } = useBoards();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteAnchor, setDeleteAnchor] = useState<HTMLElement | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [editingBoard, setEditingBoard] = useState<{ id: string; title: string } | null>(null);
 
   function handleDeleteClick(e: React.MouseEvent<HTMLElement>, boardId: string) {
     e.stopPropagation();
@@ -39,6 +44,11 @@ export default function BoardGrid() {
 
   function handleDeleteConfirm() {
     if (pendingDeleteId) deleteBoard(pendingDeleteId);
+  }
+
+  function handleEditClick(e: React.MouseEvent<HTMLElement>, boardId: string, title: string) {
+    e.stopPropagation();
+    setEditingBoard({ id: boardId, title });
   }
 
   if (loading) {
@@ -92,28 +102,39 @@ export default function BoardGrid() {
                 position: 'relative',
                 transition: 'box-shadow 0.2s, transform 0.2s',
                 '&:hover': { boxShadow: '0 4px 20px rgba(0,0,0,0.1)', transform: 'translateY(-2px)' },
-                '&:hover .delete-btn': { opacity: 1 },
+                '&:hover .card-actions': { opacity: 1 },
               }}
             >
-              <IconButton
-                className="delete-btn"
-                size="small"
-                onClick={(e) => handleDeleteClick(e, board.id)}
+              <Box
+                className="card-actions"
                 sx={{
                   position: 'absolute',
                   top: 8,
                   right: 8,
                   zIndex: 1,
+                  display: 'flex',
+                  gap: 0.5,
                   opacity: 0,
                   transition: 'opacity 0.2s',
-                  bgcolor: 'background.paper',
-                  '&:hover': { bgcolor: 'error.light', color: '#fff' },
                 }}
               >
-                <DeleteOutlineIcon fontSize="small" />
-              </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={(e) => handleEditClick(e, board.id, board.title)}
+                  sx={{ bgcolor: 'background.paper', '&:hover': { bgcolor: 'primary.light', color: '#fff' } }}
+                >
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={(e) => handleDeleteClick(e, board.id)}
+                  sx={{ bgcolor: 'background.paper', '&:hover': { bgcolor: 'error.light', color: '#fff' } }}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Box>
 
-              <CardActionArea sx={{ height: 180, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-end', p: 0 }}>
+              <CardActionArea onClick={() => router.push(`/dashboard/${board.id}`)} sx={{ height: 180, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-end', p: 0 }}>
                 <Box sx={{ position: 'absolute', inset: 0, bgcolor: color, opacity: 0.12 }} />
                 <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', opacity: 0.2 }}>
                   <GridViewIcon sx={{ fontSize: 64, color }} />
@@ -154,6 +175,13 @@ export default function BoardGrid() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onCreate={createBoard}
+      />
+
+      <EditBoardDialog
+        open={editingBoard !== null}
+        initialTitle={editingBoard?.title ?? ''}
+        onClose={() => setEditingBoard(null)}
+        onSave={(title) => editBoard(editingBoard!.id, title)}
       />
 
       <DeleteConfirmPopover

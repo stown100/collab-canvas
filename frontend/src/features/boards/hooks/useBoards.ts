@@ -9,7 +9,7 @@ export function getBoardColor(id: string): string {
 }
 
 export function useBoards() {
-  const { boards, addBoard, removeBoard, setBoards } = useBoardStore();
+  const { boards, addBoard, removeBoard, setBoards, updateBoard } = useBoardStore();
   const [loading, setLoading] = useState(true);
 
   const fetchBoards = useCallback(async () => {
@@ -37,10 +37,20 @@ export function useBoards() {
     addBoard(board);
   }
 
+  async function editBoard(id: string, title: string) {
+    const res = await fetch(`/api/boards/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    const updated = await res.json();
+    updateBoard(id, { title: updated.title, updatedAt: updated.updatedAt });
+  }
+
   async function deleteBoard(id: string) {
     removeBoard(id);
     await fetch(`/api/boards/${id}`, { method: 'DELETE' });
   }
 
-  return { boards, loading, createBoard, deleteBoard };
+  return { boards, loading, createBoard, editBoard, deleteBoard };
 }
