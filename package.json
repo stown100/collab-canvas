@@ -1,0 +1,13 @@
+{
+  "name": "collab-canvas",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev": "npm run dev --workspace=frontend & npm run dev --workspace=backend"
+  }
+}
