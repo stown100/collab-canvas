@@ -3,8 +3,11 @@ import { create } from 'zustand';
 export interface Board {
   id: string;
   title: string;
+  ownerId: string;
+  ownerName: string | null;
+  ownerImage: string | null;
+  createdAt: string;
   updatedAt: string;
-  color: string;
 }
 
 interface BoardState {

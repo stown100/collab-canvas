@@ -1,30 +1,46 @@
-import { useEffect } from 'react';
-import { useBoardStore, type Board } from '@/shared/store/boardStore';
+import { useEffect, useState, useCallback } from 'react';
+import { useBoardStore } from '@/shared/store/boardStore';
 
-const MOCK_BOARDS: Board[] = [
-  { id: '1', title: 'Дизайн главной страницы', updatedAt: '2 часа назад', color: '#6366F1' },
-  { id: '2', title: 'Брейншторм: новые функции', updatedAt: 'Вчера', color: '#06B6D4' },
-  { id: '3', title: 'Архитектура бекенда', updatedAt: '3 дня назад', color: '#F59E0B' },
-  { id: '4', title: 'Планирование спринта', updatedAt: 'Неделю назад', color: '#10B981' },
-];
+const BOARD_COLORS = ['#6366F1', '#06B6D4', '#F59E0B', '#10B981', '#EC4899', '#F97316'];
+
+export function getBoardColor(id: string): string {
+  const hash = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return BOARD_COLORS[hash % BOARD_COLORS.length];
+}
 
 export function useBoards() {
   const { boards, addBoard, removeBoard, setBoards } = useBoardStore();
+  const [loading, setLoading] = useState(true);
+
+  const fetchBoards = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/boards');
+      const data = await res.json();
+      setBoards(data);
+    } finally {
+      setLoading(false);
+    }
+  }, [setBoards]);
 
   useEffect(() => {
-    if (boards.length === 0) {
-      setBoards(MOCK_BOARDS);
-    }
-  }, [boards.length, setBoards]);
+    fetchBoards();
+  }, [fetchBoards]);
 
-  function createBoard() {
-    addBoard({
-      id: Date.now().toString(),
-      title: 'Новая доска',
-      updatedAt: 'Только что',
-      color: '#4F46E5',
+  async function createBoard(title: string) {
+    const res = await fetch('/api/boards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
     });
+    const board = await res.json();
+    addBoard(board);
   }
 
-  return { boards, createBoard, removeBoard };
+  async function deleteBoard(id: string) {
+    removeBoard(id);
+    await fetch(`/api/boards/${id}`, { method: 'DELETE' });
+  }
+
+  return { boards, loading, createBoard, deleteBoard };
 }
