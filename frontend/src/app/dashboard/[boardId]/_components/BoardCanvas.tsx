@@ -41,7 +41,7 @@ export default function BoardCanvas({ initialSnapshot }: Props) {
       inFlight?.abort();
       const controller = onUnload ? null : new AbortController();
       inFlight = controller;
-
+      console.log(JSON.stringify({ schema: editor.store.schema.serialize(), upsert, remove }))
       fetch(`/api/boards/${boardId}/records`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
