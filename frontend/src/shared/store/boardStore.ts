@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+export enum BoardRole { OWNER = 'owner', MEMBER = 'member' };
+
 export interface Board {
   id: string;
   title: string;
@@ -8,6 +10,7 @@ export interface Board {
   ownerImage: string | null;
   createdAt: string;
   updatedAt: string;
+  role: BoardRole;
 }
 
 interface BoardState {

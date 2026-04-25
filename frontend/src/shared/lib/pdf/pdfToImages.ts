@@ -1,5 +1,5 @@
 // Renders each page of a PDF file to a high-resolution PNG File.
-// Scale 2 = 192 DPI equivalent (crisp on retina / zoomed canvas).
+// Scale 4 = 192 DPI equivalent (crisp on retina / zoomed canvas).
 // Lazy-loaded to avoid importing pdfjs-dist in the initial bundle.
 
 let workerConfigured = false;
