@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/shared/lib/auth';
 import pool from '@/shared/lib/postgres/client';
+import { BoardRole } from '@/shared/store/boardStore';
 
 export async function GET() {
   const session = await auth();
@@ -8,10 +9,12 @@ export async function GET() {
 
   const { rows } = await pool.query(
     `SELECT b.id, b.title, b.owner_id, b.created_at, b.updated_at,
-            u.name AS owner_name, u.image AS owner_image
+            u.name AS owner_name, u.image AS owner_image,
+            CASE WHEN b.owner_id = $1 THEN 'owner' ELSE 'member' END AS role
      FROM boards b
      JOIN users u ON u.id = b.owner_id
-     WHERE b.owner_id = $1
+     LEFT JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $1
+     WHERE b.owner_id = $1 OR bm.user_id IS NOT NULL
      ORDER BY b.updated_at DESC`,
     [session.user.id],
   );
@@ -24,6 +27,7 @@ export async function GET() {
     ownerImage: r.owner_image,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    role: r.role as BoardRole,
   }));
 
   return NextResponse.json(boards);
@@ -52,5 +56,6 @@ export async function POST(req: Request) {
     ownerImage: session.user.image ?? null,
     createdAt: b.created_at,
     updatedAt: b.updated_at,
+    role: BoardRole.OWNER,
   });
 }

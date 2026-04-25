@@ -4,7 +4,7 @@ import pool from '@/shared/lib/postgres/client';
 import { StoreInitializer } from '@/shared/lib/StoreInitializer';
 import BoardHeader from './_components/BoardHeader';
 import BoardCanvasLoader from './_components/BoardCanvasLoader';
-import type { TLStoreSnapshot } from '@tldraw/tldraw';
+import BoardRoom from './_components/BoardRoom';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,36 +18,26 @@ export default async function BoardPage({ params }: Props) {
 
   const { boardId } = await params;
 
-  const [boardResult, recordsResult] = await Promise.all([
-    pool.query(
-      'SELECT title, tldraw_schema FROM boards WHERE id = $1 AND owner_id = $2',
-      [boardId, session?.user?.id],
-    ),
-    pool.query(
-      'SELECT data FROM board_records WHERE board_id = $1',
-      [boardId],
-    ),
-  ]);
+  const { rows } = await pool.query(
+    `SELECT b.title,
+            CASE WHEN b.owner_id = $2 THEN 'owner' ELSE 'member' END AS role
+     FROM boards b
+     LEFT JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $2
+     WHERE b.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)`,
+    [boardId, session?.user?.id],
+  );
 
-  if (!boardResult.rows[0]) notFound();
+  if (!rows[0]) notFound();
 
-  const { title, tldraw_schema: schema } = boardResult.rows[0];
-
-  const initialSnapshot: TLStoreSnapshot | null =
-    schema && recordsResult.rows.length > 0
-      ? {
-          store: Object.fromEntries(
-            recordsResult.rows.map((r) => [r.data.id, r.data]),
-          ),
-          schema,
-        }
-      : null;
+  const isOwner = rows[0].role === 'owner';
 
   return (
     <>
       <StoreInitializer user={session.user ?? null} />
-      <BoardHeader title={title} />
-      <BoardCanvasLoader initialSnapshot={initialSnapshot} />
+      <BoardHeader boardId={boardId} title={rows[0].title} isOwner={isOwner} />
+      <BoardRoom boardId={boardId}>
+        <BoardCanvasLoader />
+      </BoardRoom>
     </>
   );
 }

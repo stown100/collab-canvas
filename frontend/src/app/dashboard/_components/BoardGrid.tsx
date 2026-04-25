@@ -8,13 +8,11 @@ import CardContent from '@mui/material/CardContent';
 import CardActionArea from '@mui/material/CardActionArea';
 import Typography from '@mui/material/Typography';
 import Skeleton from '@mui/material/Skeleton';
-import IconButton from '@mui/material/IconButton';
 import Avatar from '@mui/material/Avatar';
 import AddIcon from '@mui/icons-material/Add';
 import GridViewIcon from '@mui/icons-material/GridView';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useBoards, getBoardColor } from '@/features/boards/hooks/useBoards';
+import BoardCardOverlay from '@/features/boards/ui/BoardCardOverlay';
 import CreateBoardDialog from '@/features/boards/ui/CreateBoardDialog';
 import EditBoardDialog from '@/features/boards/ui/EditBoardDialog';
 import DeleteConfirmPopover from '@/features/boards/ui/DeleteConfirmPopover';
@@ -105,34 +103,11 @@ export default function BoardGrid() {
                 '&:hover .card-actions': { opacity: 1 },
               }}
             >
-              <Box
-                className="card-actions"
-                sx={{
-                  position: 'absolute',
-                  top: 8,
-                  right: 8,
-                  zIndex: 1,
-                  display: 'flex',
-                  gap: 0.5,
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
-                }}
-              >
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleEditClick(e, board.id, board.title)}
-                  sx={{ bgcolor: 'background.paper', '&:hover': { bgcolor: 'primary.light', color: '#fff' } }}
-                >
-                  <EditOutlinedIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleDeleteClick(e, board.id)}
-                  sx={{ bgcolor: 'background.paper', '&:hover': { bgcolor: 'error.light', color: '#fff' } }}
-                >
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </Box>
+              <BoardCardOverlay
+                role={board.role}
+                onEdit={(e) => handleEditClick(e, board.id, board.title)}
+                onDelete={(e) => handleDeleteClick(e, board.id)}
+              />
 
               <CardActionArea onClick={() => router.push(`/dashboard/${board.id}`)} sx={{ height: 180, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-end', p: 0 }}>
                 <Box sx={{ position: 'absolute', inset: 0, bgcolor: color, opacity: 0.12 }} />
