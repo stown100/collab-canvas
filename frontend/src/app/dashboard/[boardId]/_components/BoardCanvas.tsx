@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 
 const DEBOUNCE_MS = 500;
 const MAX_WAIT_MS = 5_000;
+const licenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY
 
 interface Props {
   initialSnapshot: TLStoreSnapshot | null;
@@ -14,6 +15,7 @@ interface Props {
 
 export default function BoardCanvas({ initialSnapshot }: Props) {
   const { boardId } = useParams();
+  console.log(licenseKey)
   // Pre-populate the store synchronously before first render so tldraw's async
   // initialization cannot overwrite the snapshot after mount.
   const store = useMemo(
@@ -102,7 +104,7 @@ export default function BoardCanvas({ initialSnapshot }: Props) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, top: 56 }}>
-      <Tldraw store={store} licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY} />
+      <Tldraw store={store} licenseKey={licenseKey} />
     </div>
   );
 }
