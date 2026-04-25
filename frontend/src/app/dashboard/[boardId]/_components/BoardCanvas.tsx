@@ -1,6 +1,7 @@
 'use client';
 
-import { Tldraw, type Editor, type TLStoreSnapshot } from '@tldraw/tldraw';
+import { useEffect, useMemo } from 'react';
+import { Tldraw, createTLStore, loadSnapshot, type TLStoreSnapshot } from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
 import { useParams } from 'next/navigation';
 
@@ -14,11 +15,19 @@ interface Props {
 export default function BoardCanvas({ initialSnapshot }: Props) {
   const { boardId } = useParams();
 
-  function handleMount(editor: Editor) {
-    if (initialSnapshot) {
-      editor.loadSnapshot(initialSnapshot);
-    }
+  // Pre-populate the store synchronously before first render so tldraw's async
+  // initialization cannot overwrite the snapshot after mount.
+  const store = useMemo(
+    () => {
+      const s = createTLStore();
+      if (initialSnapshot) loadSnapshot(s, initialSnapshot);
+      return s;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
+  useEffect(() => {
     const upsertMap = new Map<string, unknown>();
     const removeSet = new Set<string>();
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -41,11 +50,11 @@ export default function BoardCanvas({ initialSnapshot }: Props) {
       inFlight?.abort();
       const controller = onUnload ? null : new AbortController();
       inFlight = controller;
-      console.log(JSON.stringify({ schema: editor.store.schema.serialize(), upsert, remove }))
+
       fetch(`/api/boards/${boardId}/records`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schema: editor.store.schema.serialize(), upsert, remove }),
+        body: JSON.stringify({ schema: store.schema.serialize(), upsert, remove }),
         keepalive: onUnload,
         signal: controller?.signal,
       }).catch((err: unknown) => {
@@ -59,7 +68,7 @@ export default function BoardCanvas({ initialSnapshot }: Props) {
       if (!maxWaitTimer) maxWaitTimer = setTimeout(() => flush(), MAX_WAIT_MS);
     };
 
-    const unsubscribe = editor.store.listen(
+    const unsubscribe = store.listen(
       ({ changes }) => {
         for (const record of Object.values(changes.added)) {
           upsertMap.set(record.id, record);
@@ -90,11 +99,11 @@ export default function BoardCanvas({ initialSnapshot }: Props) {
       document.removeEventListener('visibilitychange', handleVisibility);
       flushOnUnload();
     };
-  }
+  }, [store, boardId]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, top: 56 }}>
-      <Tldraw onMount={handleMount} />
+      <Tldraw store={store} />
     </div>
   );
 }
