@@ -15,6 +15,8 @@ interface Props {
 export default function BoardCanvas({ initialSnapshot }: Props) {
   const { boardId } = useParams();
 
+  console.log('[BoardCanvas] render — initialSnapshot:', initialSnapshot ? `${Object.keys(initialSnapshot.store ?? {}).length} records` : 'null');
+
   // Pre-populate the store synchronously before first render so tldraw's async
   // initialization cannot overwrite the snapshot after mount.
   const store = useMemo(
@@ -28,6 +30,16 @@ export default function BoardCanvas({ initialSnapshot }: Props) {
   );
 
   useEffect(() => {
+    console.log('[BoardCanvas] mounted — store records at mount:', Object.keys(store.allRecords()).length);
+    const unsubscribeAll = store.listen(({ changes, source }) => {
+      const added = Object.keys(changes.added).length;
+      const updated = Object.keys(changes.updated).length;
+      const removed = Object.keys(changes.removed).length;
+      if (added || updated || removed) {
+        console.log(`[store] source=${source} added=${added} updated=${updated} removed=${removed} total=${Object.keys(store.allRecords()).length}`);
+      }
+    });
+
     const upsertMap = new Map<string, unknown>();
     const removeSet = new Set<string>();
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -94,6 +106,7 @@ export default function BoardCanvas({ initialSnapshot }: Props) {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      unsubscribeAll();
       unsubscribe();
       window.removeEventListener('pagehide', flushOnUnload);
       document.removeEventListener('visibilitychange', handleVisibility);
