@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { Tldraw, createTLStore, loadSnapshot, type TLStoreSnapshot } from '@tldraw/tldraw';
+import { Tldraw, createTLStore, loadSnapshot, type Editor, type TLImageShape, type TLStoreSnapshot } from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
 import { useParams } from 'next/navigation';
+import { pdfToImageFiles } from '@/shared/lib/pdf/pdfToImages';
 
 const DEBOUNCE_MS = 500;
 const MAX_WAIT_MS = 5_000;
-const licenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY
+const licenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 
 interface Props {
   initialSnapshot: TLStoreSnapshot | null;
@@ -15,7 +16,7 @@ interface Props {
 
 export default function BoardCanvas({ initialSnapshot }: Props) {
   const { boardId } = useParams();
-  console.log(licenseKey)
+
   // Pre-populate the store synchronously before first render so tldraw's async
   // initialization cannot overwrite the snapshot after mount.
   const store = useMemo(
@@ -102,9 +103,57 @@ export default function BoardCanvas({ initialSnapshot }: Props) {
     };
   }, [store, boardId]);
 
+  function handleMount(editor: Editor) {
+    editor.registerExternalContentHandler('files', async ({ files, point }) => {
+      // Split PDF and non-PDF files
+      const pdfs = files.filter(f => f.type === 'application/pdf');
+      const others = files.filter(f => f.type !== 'application/pdf');
+
+      // Convert PDF pages to PNG files and append to the queue
+      const pdfPages: File[] = [];
+      for (const pdf of pdfs) {
+        const pages = await pdfToImageFiles(pdf);
+        pdfPages.push(...pages);
+      }
+
+      const allImageFiles = [...others, ...pdfPages];
+
+      const bounds = editor.getViewportPageBounds();
+      const dropPoint = point ?? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 };
+      let offsetY = 0;
+
+      for (const file of allImageFiles) {
+        // Let tldraw's default asset handler resolve image files
+        const asset = await editor.getAssetForExternalContent({ type: 'file', file });
+        if (!asset || asset.type !== 'image') continue;
+
+        const { w, h } = asset.props;
+        editor.createAssets([asset]);
+        editor.createShape<TLImageShape>({
+          type: 'image',
+          x: dropPoint.x - w / 2,
+          y: dropPoint.y + offsetY,
+          props: {
+            assetId: asset.id,
+            w,
+            h,
+            playing: false,
+            url: '',
+            crop: null,
+            flipX: false,
+            flipY: false,
+            altText: file.name,
+          },
+        });
+        // Stack pages vertically with a small gap
+        offsetY += h + 16;
+      }
+    });
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, top: 56 }}>
-      <Tldraw store={store} licenseKey={licenseKey} />
+      <Tldraw store={store} licenseKey={licenseKey} onMount={handleMount} />
     </div>
   );
 }
