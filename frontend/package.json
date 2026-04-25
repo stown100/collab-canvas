@@ -16,6 +16,7 @@
     "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.9",
     "@tldraw/tldraw": "^4.5.9",
+    "pdfjs-dist": "^4.4.168",
     "next": "16.2.2",
     "next-auth": "^5.0.0-beta.30",
     "pg": "^8.20.0",
