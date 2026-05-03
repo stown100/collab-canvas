@@ -1,5 +1,4 @@
-// Renders each page of a PDF file to a high-resolution PNG File.
-// Scale 4 = 192 DPI equivalent (crisp on retina / zoomed canvas).
+// Renders each page of a PDF file to a PNG File.
 // Lazy-loaded to avoid importing pdfjs-dist in the initial bundle.
 
 let workerConfigured = false;
@@ -13,7 +12,7 @@ async function getPdfjs() {
   return pdfjs;
 }
 
-export async function pdfToImageFiles(file: File, scale = 4): Promise<File[]> {
+export async function pdfToImageFiles(file: File, scale = 2): Promise<File[]> {
   const pdfjs = await getPdfjs();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
