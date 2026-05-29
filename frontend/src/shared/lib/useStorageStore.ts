@@ -3,6 +3,7 @@
 import '@/shared/lib/liveblocks.config';
 import { useEffect, useState } from 'react';
 import { useRoom } from '@liveblocks/react/suspense';
+import { createBlobAssetStore } from '@/shared/lib/board/blobAssetStore';
 import {
   computed,
   createPresenceStateDerivation,
@@ -37,39 +38,9 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
   const room = useRoom();
 
   const [store] = useState(() => {
-    // Liveblocks Storage caps individual records at ~1MB, so the default
-    // base64 asset store (which inlines files into asset.props.src) loses
-    // anything larger on reload. Upload to our backend and store only a URL.
     const created: TLStore = createTLStore({
       shapeUtils: [...defaultShapeUtils],
-      assets: {
-        upload: async (_asset, file) => {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await fetch(`/api/boards/${boardId}/assets`, {
-            method: 'POST',
-            body: formData,
-          });
-          if (!res.ok) throw new Error(`Asset upload failed: ${res.status}`);
-          const { url } = (await res.json()) as { url: string };
-          return { src: url };
-        },
-        remove: async (ids) => {
-          // Snapshot src URLs synchronously — tldraw removes the records right after this call.
-          const prefix = `/api/boards/${boardId}/assets/`;
-          const urls: string[] = [];
-          for (const id of ids) {
-            const record = created.get(id);
-            if (record?.typeName === 'asset' && record.type === 'image') {
-              const src = record.props.src;
-              if (src && src.startsWith(prefix)) urls.push(src);
-            }
-          }
-          await Promise.allSettled(
-            urls.map(url => fetch(url, { method: 'DELETE' })),
-          );
-        },
-      },
+      assets: createBlobAssetStore(boardId, () => created),
     });
     return created;
   });
