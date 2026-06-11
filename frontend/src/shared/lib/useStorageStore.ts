@@ -4,6 +4,7 @@ import '@/shared/lib/liveblocks.config';
 import { useEffect, useState } from 'react';
 import { useRoom } from '@liveblocks/react/suspense';
 import { createBlobAssetStore } from '@/shared/lib/board/blobAssetStore';
+import { createBoardRecordsSync } from '@/shared/lib/board/boardRecordsSync';
 import {
   computed,
   createPresenceStateDerivation,
@@ -72,7 +73,8 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
         'initialize',
       );
 
-      // Local tldraw changes → Liveblocks Storage
+      // Local tldraw changes → Liveblocks Storage (realtime) + own DB (durable).
+      const recordsSync = createBoardRecordsSync(boardId, store);
       unsubs.push(
         store.listen(
           ({ changes }: TLStoreEventInfo) => {
@@ -81,10 +83,19 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
               Object.values(changes.updated).forEach(([, r]) => liveRecords.set(r.id, r));
               Object.values(changes.removed).forEach(r => liveRecords.delete(r.id));
             });
+            recordsSync.enqueue(changes);
           },
           { source: 'user', scope: 'document' },
         ),
       );
+
+      // Flush pending edits when the tab is hidden so nothing is lost on close.
+      const flushOnHide = () => {
+        if (document.visibilityState === 'hidden') void recordsSync.flush();
+      };
+      document.addEventListener('visibilitychange', flushOnHide);
+      unsubs.push(() => document.removeEventListener('visibilitychange', flushOnHide));
+      unsubs.push(() => recordsSync.stop());
 
       // Local session/presence → Liveblocks Presence
       const syncPresence = ({ changes }: TLStoreEventInfo) => {
@@ -176,7 +187,7 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
       unsubs.forEach(fn => fn());
       unsubs.length = 0;
     };
-  }, [room, store, user.id, user.name, user.color]);
+  }, [room, store, boardId, user.id, user.name, user.color]);
 
   return storeWithStatus;
 }

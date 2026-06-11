@@ -2,62 +2,69 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/shared/lib/auth';
 import pool from '@/shared/lib/postgres/client';
 
-interface RecordsDelta {
-  schema: unknown;
-  upsert: Array<{ id: string;[key: string]: unknown }>;
-  remove: string[];
+const BACKEND_URL = process.env.BACKEND_URL;
+const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET;
+
+// Authenticates the user and checks board membership. Returns the proxy target
+// on success, or a ready-to-return error response otherwise. The actual DB work
+// happens in the Express backend — this layer only authorizes and forwards.
+async function authorizeBoard(boardId: string): Promise<{ url: string } | { error: NextResponse }> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+
+  const { rowCount } = await pool.query(
+    `SELECT 1 FROM boards b
+     LEFT JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $2
+     WHERE b.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)`,
+    [boardId, session.user.id],
+  );
+  if (!rowCount) {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+
+  if (!BACKEND_URL || !INTERNAL_API_SECRET) {
+    return { error: NextResponse.json({ error: 'Backend is not configured' }, { status: 500 }) };
+  }
+
+  return { url: `${BACKEND_URL}/api/boards/${boardId}/records` };
+}
+
+const internalHeaders: HeadersInit = {
+  'Content-Type': 'application/json',
+  'x-internal-secret': INTERNAL_API_SECRET ?? '',
+};
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const gate = await authorizeBoard(id);
+  if ('error' in gate) return gate.error;
+
+  const res = await fetch(gate.url, { headers: internalHeaders, cache: 'no-store' });
+  const body = await res.text();
+  return new NextResponse(body, {
+    status: res.status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const { id } = await params;
-  const { schema, upsert, remove } = (await req.json()) as RecordsDelta;
+  const gate = await authorizeBoard(id);
+  if ('error' in gate) return gate.error;
 
-  const { rowCount } = await pool.query(
-    'SELECT 1 FROM boards WHERE id = $1 AND owner_id = $2',
-    [id, session.user.id],
-  );
-  if (!rowCount) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    if (upsert.length > 0) {
-      await client.query(
-        `INSERT INTO board_records (board_id, record_id, data)
-         SELECT $1, r->>'id', r
-         FROM jsonb_array_elements($2::jsonb) r
-         ON CONFLICT (board_id, record_id)
-         DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
-        [id, JSON.stringify(upsert)],
-      );
-    }
-
-    if (remove.length > 0) {
-      await client.query(
-        'DELETE FROM board_records WHERE board_id = $1 AND record_id = ANY($2)',
-        [id, remove],
-      );
-    }
-
-    await client.query(
-      'UPDATE boards SET tldraw_schema = $1, updated_at = now() WHERE id = $2',
-      [JSON.stringify(schema), id],
-    );
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-
-  return new NextResponse(null, { status: 204 });
+  const payload = await req.text();
+  const res = await fetch(gate.url, {
+    method: 'PATCH',
+    headers: internalHeaders,
+    body: payload,
+  });
+  return new NextResponse(null, { status: res.status });
 }
