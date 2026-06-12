@@ -3,7 +3,7 @@
 import '@/shared/lib/liveblocks.config';
 import { useEffect, useState } from 'react';
 import { useRoom } from '@liveblocks/react/suspense';
-import { createBlobAssetStore } from '@/shared/lib/board/blobAssetStore';
+import { createMinioAssetStore } from '@/shared/lib/board/minioAssetStore';
 import { createBoardRecordsSync } from '@/shared/lib/board/boardRecordsSync';
 import { fetchBoardRecords, migrateBoardRecords } from '@/shared/lib/board/boardRecordsLoad';
 import {
@@ -42,7 +42,7 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
   const [store] = useState(() => {
     const created: TLStore = createTLStore({
       shapeUtils: [...defaultShapeUtils],
-      assets: createBlobAssetStore(boardId, () => created),
+      assets: createMinioAssetStore(boardId, () => created),
     });
     return created;
   });

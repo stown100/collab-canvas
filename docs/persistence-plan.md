@@ -74,27 +74,28 @@
 
 ## ЧАСТЬ C. Файлы (картинки/PDF): Vercel Blob → MinIO
 
+> Подход выбран: **stream-through-backend** — байты идут браузер → Next.js → Express → MinIO (и загрузка, и выдача). MinIO полностью внутренний, presigned URL и CORS не нужны.
+
 ### Этап 5. Поднять MinIO и схему
-- [ ] 19. Запустить MinIO (docker-compose для локалки), создать бакет (`board-assets`), ключи доступа.
-- [ ] 20. Env (`backend/.env`): `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, `MINIO_REGION`.
-- [ ] 21. Backend: `@aws-sdk/client-s3` (+ `@aws-sdk/s3-request-presigner`), S3-клиент на MinIO.
-- [ ] 22. Миграция БД: скорректировать `board_assets` (хранить `bucket`/`object_key` вместо blob `url`/`pathname`).
+- [x] 19. `docker-compose.yml` (MinIO + авто-создание бакета `board-assets`). → запуск за пользователем
+- [x] 20. Env (`backend/.env`): `MINIO_ENDPOINT`, `MINIO_REGION`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`. ✅
+- [x] 21. Backend: `@aws-sdk/client-s3`, S3-клиент на MinIO. → `backend/src/services/storage.ts`
+- [x] 22. Миграция `009_board_assets_minio.sql`: `object_key` + `url/pathname` nullable. → применена ✅
 
 ### Этап 6. Express — загрузка/выдача/удаление файлов
-- [ ] 23. `POST /api/boards/:id/assets/presign` — выдать presigned PUT URL на MinIO.
-- [ ] 24. `POST /api/boards/:id/assets` — сохранить метаданные (`object_key`, mime, размер), вернуть прокси-URL.
-- [ ] 25. `GET /api/boards/:id/assets/:assetId` — стримить объект из MinIO членам доски (S3 `GetObject`).
-- [ ] 26. `DELETE` — `DeleteObject` в MinIO + удалить строку в БД.
-- [ ] 27. Next.js-роуты `assets` → прокси на Express (auth + членство, дальше с секретом).
+- [x] 23. `POST /api/boards/:id/assets` — приём файла (raw body) → MinIO put + insert метаданных → `{assetId,url}`. → `backend/src/services/boardAssets.ts`, `backend/src/routes/assets.ts`
+- [x] 24. `GET /api/boards/:id/assets/:assetId` — стрим объекта из MinIO. → `boardAssets.ts`/`assets.ts`
+- [x] 25. `DELETE /api/boards/:id/assets/:assetId` — `DeleteObject` + удаление строки. → `boardAssets.ts`/`assets.ts`
+- [x] 26. Проверка ручек `curl`: 403 без секрета, 415 неподдерж. тип, upload → get (стрим из MinIO) → delete → 404. ✅
 
-### Этап 7. Клиент — переключить аплоад на MinIO
-- [ ] 28. В `blobAssetStore.ts` заменить `@vercel/blob` upload на: presigned URL → `PUT` в MinIO → сохранить метаданные. Прогресс-индикатор сохранить.
-- [ ] 29. Настроить CORS на бакете MinIO для прямых PUT с браузера.
-- [ ] 30. Тесты: дроп картинки/PDF → файл в MinIO, метаданные в БД, отдаётся только членам.
+### Этап 7. Next.js-прокси + клиент
+- [x] 27. Next.js-роуты `assets` (POST/GET/DELETE) → прокси на Express. Общий хелпер `authorizeBoardMember` → `frontend/src/shared/lib/boardBackend.ts` (records-роут переведён на него же).
+- [x] 28. Клиент: `minioAssetStore.ts` (XHR-загрузка с прогрессом, прокси-URL); `useStorageStore` переключён; старые `blobAssetStore.ts` и `api/blob/upload` удалены.
+- [x] 29. Тесты (UI): дроп картинки → файл в MinIO, строка в `board_assets` с `object_key`, отдаётся участникам (проверено на двух аккаунтах на localhost). ✅
 
 ### Этап 8. Вывод Vercel Blob из эксплуатации
-- [ ] 31. (Опц.) скрипт миграции существующих файлов из Blob в MinIO.
-- [ ] 32. Убрать `@vercel/blob`, `blob/upload/route.ts`, env `BLOB_*`.
+- [x] 30. Старые Blob-ассеты удалены (решение: чистый старт). Миграция `010_board_assets_drop_blob.sql`: `DELETE` legacy + `object_key NOT NULL` + удаление колонок `url`/`pathname`. board_assets: 42 → 4. ✅
+- [x] 31. Убраны `@vercel/blob` (frontend) и `api/blob/upload`. Env `BLOB_STORE_ID`/`BLOB_READ_WRITE_TOKEN` — убрать из `frontend/.env.local` (за пользователем, не критично).
 
 ---
 
