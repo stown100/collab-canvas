@@ -1,5 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { connectDB } from './services/db';
@@ -12,6 +13,9 @@ const app = express();
 const httpServer = createServer(app);
 
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000' }));
+// gzip responses; compressible types (JSON) are compressed, binary assets
+// (images) are skipped automatically.
+app.use(compression());
 app.use(express.json({ limit: '5mb' }));
 app.use('/api', router);
 
