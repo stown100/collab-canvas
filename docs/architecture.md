@@ -105,6 +105,6 @@ cd frontend && npm install && npm run dev
 
 Локально MinIO живёт в docker (окружение разработки). Для продакшена нужно:
 - поднять MinIO (или S3/R2) на всегда-онлайн сервере, прописать прод `MINIO_*`;
-- задеплоить Express (доступен из Next.js), прописать прод `BACKEND_URL` + `INTERNAL_API_SECRET`.
+- задеплоить Express (доступен из Next.js), прописать прод `BACKEND_URL` + `INTERNAL_API_SECRET`. Express деплоится **вторым проектом Vercel** (`collab-canvas-backend`, Root Directory `backend`): на Vercel `src/index.ts` экспортирует `app` как serverless-функцию, локально — обычный HTTP-сервер. Браузер к Express не обращается, поэтому отдельный адрес бэкенда пользователям не виден.
 
 Подробнее — в [persistence-plan.md](persistence-plan.md), раздел «Этап 9a».

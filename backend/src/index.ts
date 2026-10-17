@@ -10,7 +10,6 @@ import { initWebSocket } from './ws';
 dotenv.config();
 
 const app = express();
-const httpServer = createServer(app);
 
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000' }));
 // gzip responses; compressible types (JSON) are compressed, binary assets
@@ -25,12 +24,19 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 app.use(errorHandler);
 
-initWebSocket(httpServer);
+// On Vercel the exported app runs as a serverless function — no long-lived
+// server, so no WebSocket. Locally it is a regular HTTP server.
+if (!process.env.VERCEL) {
+  const httpServer = createServer(app);
+  initWebSocket(httpServer);
 
-const PORT = process.env.PORT || 4000;
+  const PORT = process.env.PORT || 4000;
 
-connectDB().then(() => {
-  httpServer.listen(PORT, () => {
-    console.log(`Backend running on http://localhost:${PORT}`);
+  connectDB().then(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`Backend running on http://localhost:${PORT}`);
+    });
   });
-});
+}
+
+export default app;

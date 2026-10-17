@@ -115,7 +115,7 @@
   - Приватный бакет `board-assets` (Public Access: Disabled), Account API token с правами Object Read & Write только на этот бакет.
   - `backend/.env` переключён на R2 (`MINIO_REGION=auto`); файлы из локального MinIO скопированы в R2 с теми же `object_key`. Локально Docker больше не нужен.
   - Те же `MINIO_*` прописать на хостинге Express.
-- [ ] Задеплоить Express-бэкенд (всегда онлайн, доступен из Next.js); прописать прод `BACKEND_URL` + общий `INTERNAL_API_SECRET`.
+- [ ] Задеплоить Express-бэкенд **отдельным проектом Vercel** `collab-canvas-backend` из того же репозитория (Root Directory `backend`, zero-config Express). `src/index.ts` экспортирует `app`; HTTP-сервер и WebSocket поднимаются только вне Vercel (`!process.env.VERCEL`). Прописать прод `BACKEND_URL` + общий `INTERNAL_API_SECRET` во фронтенд-проекте.
 - [ ] Проверить сетевой путь: Vercel (Next.js) → Express → MinIO/Postgres из прод-окружения.
 
 ---
