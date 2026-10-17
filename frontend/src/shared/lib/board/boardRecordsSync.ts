@@ -13,6 +13,7 @@ type StoreChanges = TLStoreEventInfo['changes'];
 
 export interface BoardRecordsSync {
   enqueue: (changes: StoreChanges) => void;
+  enqueueDiff: (upsert: TLRecord[], remove: string[]) => void;
   flush: () => Promise<void>;
   stop: () => void;
 }
@@ -62,25 +63,31 @@ export function createBoardRecordsSync(boardId: string, store: TLStore): BoardRe
     }
   }
 
-  function enqueue(changes: StoreChanges): void {
-    for (const r of Object.values(changes.added)) {
+  // Queues an explicit set of records to write and ids to delete — e.g. the
+  // result of reconciling the DB copy with the live board.
+  function enqueueDiff(upsert: TLRecord[], remove: string[]): void {
+    if (upsert.length === 0 && remove.length === 0) return;
+    for (const r of upsert) {
       pendingRemove.delete(r.id);
       pendingUpsert.set(r.id, r);
     }
-    for (const [, r] of Object.values(changes.updated)) {
-      pendingRemove.delete(r.id);
-      pendingUpsert.set(r.id, r);
-    }
-    for (const r of Object.values(changes.removed)) {
-      pendingUpsert.delete(r.id);
-      pendingRemove.add(r.id);
+    for (const id of remove) {
+      pendingUpsert.delete(id);
+      pendingRemove.add(id);
     }
     scheduleFlush();
+  }
+
+  function enqueue(changes: StoreChanges): void {
+    enqueueDiff(
+      [...Object.values(changes.added), ...Object.values(changes.updated).map(([, r]) => r)],
+      Object.values(changes.removed).map(r => r.id),
+    );
   }
 
   function stop(): void {
     void flush();
   }
 
-  return { enqueue, flush, stop };
+  return { enqueue, enqueueDiff, flush, stop };
 }

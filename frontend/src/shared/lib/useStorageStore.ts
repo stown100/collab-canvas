@@ -5,7 +5,11 @@ import { useEffect, useState } from 'react';
 import { useRoom } from '@liveblocks/react/suspense';
 import { createMinioAssetStore } from '@/shared/lib/board/minioAssetStore';
 import { createBoardRecordsSync } from '@/shared/lib/board/boardRecordsSync';
-import { fetchBoardRecords, migrateBoardRecords } from '@/shared/lib/board/boardRecordsLoad';
+import {
+  diffBoardRecords,
+  fetchBoardRecords,
+  migrateBoardRecords,
+} from '@/shared/lib/board/boardRecordsLoad';
 import {
   computed,
   createPresenceStateDerivation,
@@ -66,22 +70,21 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const liveRecords = root.get('records') as import('@liveblocks/client').LiveMap<string, any>;
 
-      // Load the durable copy from our own DB — it is the source of truth. A cold
-      // room (no live data) is hydrated from the DB; a warm room (someone already
-      // editing) keeps its live Liveblocks state. On a load failure we fall back
-      // to Liveblocks so the board still opens.
+      // A warm room (live Liveblocks data) opens straight away from that state;
+      // its DB copy is reconciled in the background once the board is shown. A
+      // cold room is hydrated from our own DB, the source of truth — on a load
+      // failure it opens empty rather than not at all.
+      const isWarm = liveRecords.size > 0;
       let dbRecords: TLRecord[] = [];
-      let dbLoaded = false;
-      try {
-        dbRecords = migrateBoardRecords(store, await fetchBoardRecords(boardId));
-        dbLoaded = true;
-      } catch (err) {
-        console.error('Board DB load failed, falling back to Liveblocks:', err);
+      if (!isWarm) {
+        try {
+          dbRecords = migrateBoardRecords(store, await fetchBoardRecords(boardId));
+        } catch (err) {
+          console.error('Board DB load failed, opening an empty board:', err);
+        }
+        if (cancelled) return;
       }
-      if (cancelled) return;
-
-      const hydrateFromDb = dbLoaded && liveRecords.size === 0;
-      const seedRecords = hydrateFromDb ? dbRecords : [...liveRecords.values()];
+      const seedRecords = isWarm ? [...liveRecords.values()] : dbRecords;
 
       // Seed default records so tldraw has a valid document and page.
       store.clear();
@@ -99,7 +102,7 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
       );
 
       // Cold room: push the DB state into Liveblocks so collaborators load the same.
-      if (hydrateFromDb && dbRecords.length > 0) {
+      if (!isWarm && dbRecords.length > 0) {
         room.batch(() => {
           dbRecords.forEach(r => liveRecords.set(r.id, r));
         });
@@ -195,6 +198,17 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
 
       if (cancelled) return;
       setStoreWithStatus({ store, status: 'synced-remote', connectionStatus: 'online' });
+
+      // Warm room: bring the DB copy in line with what the board shows — write
+      // edits that never reached it, drop records deleted meanwhile.
+      if (isWarm) {
+        try {
+          const { upsert, remove } = diffBoardRecords(store, await fetchBoardRecords(boardId));
+          if (!cancelled) recordsSync.enqueueDiff(upsert, remove);
+        } catch (err) {
+          console.error('Board DB reconcile failed:', err);
+        }
+      }
     }
 
     setup();
