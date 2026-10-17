@@ -3,7 +3,13 @@
 import '@/shared/lib/liveblocks.config';
 import { useEffect, useState } from 'react';
 import { useRoom } from '@liveblocks/react/suspense';
-import { createBlobAssetStore } from '@/shared/lib/board/blobAssetStore';
+import { createMinioAssetStore } from '@/shared/lib/board/minioAssetStore';
+import { createBoardRecordsSync } from '@/shared/lib/board/boardRecordsSync';
+import {
+  diffBoardRecords,
+  fetchBoardRecords,
+  migrateBoardRecords,
+} from '@/shared/lib/board/boardRecordsLoad';
 import {
   computed,
   createPresenceStateDerivation,
@@ -40,7 +46,7 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
   const [store] = useState(() => {
     const created: TLStore = createTLStore({
       shapeUtils: [...defaultShapeUtils],
-      assets: createBlobAssetStore(boardId, () => created),
+      assets: createMinioAssetStore(boardId, () => created),
     });
     return created;
   });
@@ -49,13 +55,36 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
     status: 'loading',
   });
 
+  // Sync the document between tldraw, Liveblocks (realtime) and our own DB
+  // (durable). Keyed on room/board only, so the store is seeded exactly once —
+  // re-seeding while the editor is mounted would clear the document mid-render.
+  // The `cancelled` flag stops a torn-down run (StrictMode / remount) from
+  // mutating the store after its cleanup.
   useEffect(() => {
+    let cancelled = false;
     const unsubs: Array<() => void> = [];
 
     async function setup() {
       const { root } = await room.getStorage();
+      if (cancelled) return;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const liveRecords = root.get('records') as import('@liveblocks/client').LiveMap<string, any>;
+
+      // A warm room (live Liveblocks data) opens straight away from that state;
+      // its DB copy is reconciled in the background once the board is shown. A
+      // cold room is hydrated from our own DB, the source of truth — on a load
+      // failure it opens empty rather than not at all.
+      const isWarm = liveRecords.size > 0;
+      let dbRecords: TLRecord[] = [];
+      if (!isWarm) {
+        try {
+          dbRecords = migrateBoardRecords(store, await fetchBoardRecords(boardId));
+        } catch (err) {
+          console.error('Board DB load failed, opening an empty board:', err);
+        }
+        if (cancelled) return;
+      }
+      const seedRecords = isWarm ? [...liveRecords.values()] : dbRecords;
 
       // Seed default records so tldraw has a valid document and page.
       store.clear();
@@ -67,12 +96,20 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
             name: 'Page 1',
             index: 'a1' as IndexKey,
           }),
-          ...[...liveRecords.values()],
+          ...seedRecords,
         ],
         'initialize',
       );
 
-      // Local tldraw changes → Liveblocks Storage
+      // Cold room: push the DB state into Liveblocks so collaborators load the same.
+      if (!isWarm && dbRecords.length > 0) {
+        room.batch(() => {
+          dbRecords.forEach(r => liveRecords.set(r.id, r));
+        });
+      }
+
+      // Local tldraw changes → Liveblocks Storage (realtime) + own DB (durable).
+      const recordsSync = createBoardRecordsSync(boardId, store);
       unsubs.push(
         store.listen(
           ({ changes }: TLStoreEventInfo) => {
@@ -81,10 +118,19 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
               Object.values(changes.updated).forEach(([, r]) => liveRecords.set(r.id, r));
               Object.values(changes.removed).forEach(r => liveRecords.delete(r.id));
             });
+            recordsSync.enqueue(changes);
           },
           { source: 'user', scope: 'document' },
         ),
       );
+
+      // Flush pending edits when the tab is hidden so nothing is lost on close.
+      const flushOnHide = () => {
+        if (document.visibilityState === 'hidden') void recordsSync.flush();
+      };
+      document.addEventListener('visibilitychange', flushOnHide);
+      unsubs.push(() => document.removeEventListener('visibilitychange', flushOnHide));
+      unsubs.push(() => recordsSync.stop());
 
       // Local session/presence → Liveblocks Presence
       const syncPresence = ({ changes }: TLStoreEventInfo) => {
@@ -126,24 +172,6 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
         ),
       );
 
-      // Local cursor/selection → presence derivation
-      const userSignal = computed<{ id: string; name?: string | null; color?: string | null }>(
-        'userPreferences',
-        () => ({ id: user.id, name: user.name, color: user.color }),
-      );
-
-      const connectionId = String(room.getSelf()?.connectionId ?? 0);
-      const presenceId = InstancePresenceRecordType.createId(connectionId);
-      const presenceDeriv = createPresenceStateDerivation(userSignal, presenceId)(store);
-
-      room.updatePresence({ presence: presenceDeriv.get() ?? null });
-      unsubs.push(
-        react('sync presence', () => {
-          const presence = presenceDeriv.get() ?? null;
-          requestAnimationFrame(() => room.updatePresence({ presence }));
-        }),
-      );
-
       // Remote cursors/selections → tldraw store
       unsubs.push(
         room.subscribe('others', (others, event) => {
@@ -168,14 +196,48 @@ export function useStorageStore({ user, boardId }: UseStorageStoreOpts): TLStore
         }),
       );
 
+      if (cancelled) return;
       setStoreWithStatus({ store, status: 'synced-remote', connectionStatus: 'online' });
+
+      // Warm room: bring the DB copy in line with what the board shows — write
+      // edits that never reached it, drop records deleted meanwhile.
+      if (isWarm) {
+        try {
+          const { upsert, remove } = diffBoardRecords(store, await fetchBoardRecords(boardId));
+          if (!cancelled) recordsSync.enqueueDiff(upsert, remove);
+        } catch (err) {
+          console.error('Board DB reconcile failed:', err);
+        }
+      }
     }
 
     setup();
     return () => {
+      cancelled = true;
       unsubs.forEach(fn => fn());
       unsubs.length = 0;
     };
+  }, [room, store, boardId]);
+
+  // Publish this user's cursor/selection as Liveblocks presence. Kept separate
+  // from the storage setup so a change of user info never re-seeds the document.
+  useEffect(() => {
+    const userSignal = computed<{ id: string; name?: string | null; color?: string | null }>(
+      'userPreferences',
+      () => ({ id: user.id, name: user.name, color: user.color }),
+    );
+
+    const connectionId = String(room.getSelf()?.connectionId ?? 0);
+    const presenceId = InstancePresenceRecordType.createId(connectionId);
+    const presenceDeriv = createPresenceStateDerivation(userSignal, presenceId)(store);
+
+    room.updatePresence({ presence: presenceDeriv.get() ?? null });
+    const unsub = react('sync presence', () => {
+      const presence = presenceDeriv.get() ?? null;
+      requestAnimationFrame(() => room.updatePresence({ presence }));
+    });
+
+    return () => unsub();
   }, [room, store, user.id, user.name, user.color]);
 
   return storeWithStatus;

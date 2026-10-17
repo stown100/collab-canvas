@@ -1,0 +1,39 @@
+# Local self-hosted object storage for board assets (images / PDF pages).
+# Brings up MinIO and auto-creates the bucket used by the backend.
+#
+#   docker compose up -d
+#
+# Console UI: http://localhost:9001  (login: MINIO_ROOT_USER / MINIO_ROOT_PASSWORD)
+# S3 API:     http://localhost:9000  (used by the Express backend)
+
+services:
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+
+  # One-shot job: waits for MinIO, then creates the bucket if missing.
+  createbucket:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-board-assets}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do sleep 1; done;
+      mc mb -p local/$$MINIO_BUCKET || true;
+      exit 0;
+      "
+
+volumes:
+  minio-data:

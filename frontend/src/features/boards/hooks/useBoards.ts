@@ -15,7 +15,7 @@ export function useBoards() {
   const fetchBoards = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/boards');
+      const res = await fetch('/api/boards', { cache: 'no-store' });
       const data = await res.json();
       setBoards(data);
     } finally {
