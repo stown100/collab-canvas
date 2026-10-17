@@ -2,9 +2,15 @@ import { Liveblocks } from '@liveblocks/node';
 import { auth } from '@/shared/lib/auth';
 import pool from '@/shared/lib/postgres/client';
 
-const liveblocks = new Liveblocks({
-  secret: process.env.LIVEBLOCKS_SECRET_KEY!,
-});
+let liveblocks: Liveblocks | undefined;
+
+// Created on first use, not at import: the constructor validates the secret,
+// and `next build` loads this route without env (Vercel preview deployments).
+function getLiveblocks(): Liveblocks {
+  return (liveblocks ??= new Liveblocks({
+    secret: process.env.LIVEBLOCKS_SECRET_KEY!,
+  }));
+}
 
 // Deterministic color from user ID so the same user always has the same cursor color.
 function userColor(userId: string): string {
@@ -29,7 +35,7 @@ export async function POST(req: Request) {
   );
   if (!rowCount) return new Response('Forbidden', { status: 403 });
 
-  const liveblocksSession = liveblocks.prepareSession(session.user.id, {
+  const liveblocksSession = getLiveblocks().prepareSession(session.user.id, {
     userInfo: {
       name: session.user.name ?? 'Anonymous',
       color: userColor(session.user.id),
