@@ -115,8 +115,12 @@
   - Приватный бакет `board-assets` (Public Access: Disabled), Account API token с правами Object Read & Write только на этот бакет.
   - `backend/.env` переключён на R2 (`MINIO_REGION=auto`); файлы из локального MinIO скопированы в R2 с теми же `object_key`. Локально Docker больше не нужен.
   - Те же `MINIO_*` прописать на хостинге Express.
-- [ ] Задеплоить Express-бэкенд **отдельным проектом Vercel** `collab-canvas-backend` из того же репозитория (Root Directory `backend`, zero-config Express). `src/index.ts` экспортирует `app`; HTTP-сервер и WebSocket поднимаются только вне Vercel (`!process.env.VERCEL`). Прописать прод `BACKEND_URL` + общий `INTERNAL_API_SECRET` во фронтенд-проекте.
-- [ ] Проверить сетевой путь: Vercel (Next.js) → Express → MinIO/Postgres из прод-окружения.
+- [x] Задеплоить Express-бэкенд **отдельным проектом Vercel** `collab-canvas-backend` (домен `collab-canvas-snowy.vercel.app`) ✅ из того же репозитория (Root Directory `backend`, zero-config Express). `src/index.ts` экспортирует `app`; HTTP-сервер и WebSocket поднимаются только вне Vercel (`!process.env.VERCEL`). Прописать прод `BACKEND_URL` + общий `INTERNAL_API_SECRET` во фронтенд-проекте.
+- [x] Проверить сетевой путь: Vercel (Next.js) → Express → R2/Postgres из прод-окружения. ✅ (PR #7 смержен; загрузка/выдача файлов из R2, сохранение `board_records` с прода)
+- [x] Миграция `012`: удалены `url`/`pathname` и последняя legacy-строка без `object_key`; `object_key NOT NULL`. ✅
+- [x] Чистка неиспользуемых файлов: удалены 5 записей `board_assets` + объекты R2, на которые не ссылается ни одна доска (ни в `board_records`, ни в Liveblocks). Итог: 16 записей = 16 объектов в R2, все используются. ✅
+- [ ] Убрать Vercel Blob: env `BLOB_*` во фронтенд-проекте и сам Blob store (в панели Vercel).
+- [ ] Лицензия tldraw: пробный ключ до 2026-10-30 → Hobby-ключ в `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` (Vercel + `frontend/.env.local`), затем Redeploy фронтенда.
 
 ---
 
