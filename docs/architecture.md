@@ -61,7 +61,7 @@ Collab Canvas — совместная доска (tldraw). Данные при�
 | `FRONTEND_URL` | Источник для CORS |
 | `DATABASE_URL` | Postgres |
 | `INTERNAL_API_SECRET` | Должен совпадать с фронтендом |
-| `MINIO_ENDPOINT`, `MINIO_REGION`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` | Доступ к MinIO |
+| `MINIO_ENDPOINT`, `MINIO_REGION`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` | Доступ к S3-совместимому хранилищу. Сейчас — **Cloudflare R2**: `MINIO_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, `MINIO_REGION=auto`, бакет `board-assets`. Для локального MinIO — `http://localhost:9000` |
 
 ### `docker-compose.yml` (MinIO, опционально)
 `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET` — по умолчанию `minioadmin` / `minioadmin` / `board-assets`.
@@ -97,6 +97,9 @@ cd frontend && npm install && npm run dev
 | `008_board_assets_blob.sql` | Перенос байтов ассетов в Vercel Blob |
 | `009_board_assets_minio.sql` | `object_key` (MinIO), `url`/`pathname` → nullable |
 | `010_board_assets_drop_blob.sql` | Удаление legacy-Blob и колонок `url`/`pathname` |
+| `011_board_assets_blob_compat.sql` | Возврат `url`/`pathname` (nullable) и nullable `object_key`, пока прод на Blob-коде из `main` |
+
+> Миграции, удаляющие колонки (как `010`), применяются к прод-БД только **после** деплоя кода, который эти колонки больше не использует. Иначе прод, работающий на старом коде, падает.
 
 ## Прод
 
