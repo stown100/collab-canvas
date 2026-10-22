@@ -16,8 +16,15 @@
     "@liveblocks/client": "^3.18.5",
     "@liveblocks/node": "^3.18.4",
     "@liveblocks/react": "^3.18.5",
+    "@liveblocks/yjs": "3.18.5",
     "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.9",
+    "@tiptap/extension-collaboration": "^3.32.0",
+    "@tiptap/extension-collaboration-caret": "^3.32.0",
+    "@tiptap/extension-list": "^3.32.0",
+    "@tiptap/extensions": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
     "@tldraw/tldraw": "^4.5.9",
     "bcryptjs": "^3.0.3",
     "next": "16.2.2",
@@ -27,6 +34,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tldraw": "^4.5.10",
+    "yjs": "^13.6.33",
     "zustand": "^5.0.12"
   },
   "devDependencies": {

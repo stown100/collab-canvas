@@ -19,7 +19,9 @@ declare global {
         color: string;
       };
     };
-    RoomEvent: never;
+    // Signals other clients to re-fetch data that lives only in our DB (the
+    // event carries no payload — Postgres stays the source of truth).
+    RoomEvent: { type: 'notes-changed' };
   }
 }
 
