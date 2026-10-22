@@ -5,6 +5,7 @@ import { StoreInitializer } from '@/shared/lib/StoreInitializer';
 import BoardHeader from './_components/BoardHeader';
 import BoardCanvasLoader from './_components/BoardCanvasLoader';
 import BoardRoom from './_components/BoardRoom';
+import { NotesDrawer } from '@/features/notes';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,7 @@ export default async function BoardPage({ params }: Props) {
       <BoardHeader boardId={boardId} title={rows[0].title} isOwner={isOwner} />
       <BoardRoom boardId={boardId}>
         <BoardCanvasLoader />
+        <NotesDrawer key={boardId} boardId={boardId} />
       </BoardRoom>
     </>
   );

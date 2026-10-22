@@ -8,6 +8,7 @@ import Stack from '@mui/material/Stack';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useRouter } from 'next/navigation';
 import { UserBlock, MembersMenu } from '@/widgets/header';
+import { NotesButton } from '@/features/notes';
 
 interface Props {
   boardId: string;
@@ -28,6 +29,7 @@ export default function BoardHeader({ boardId, title, isOwner }: Props) {
           {title}
         </Typography>
         <Stack direction="row" alignItems="center" spacing={2}>
+          <NotesButton />
           {isOwner && <MembersMenu boardId={boardId} />}
           <UserBlock />
         </Stack>
