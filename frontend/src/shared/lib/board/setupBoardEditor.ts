@@ -129,8 +129,25 @@ function registerImageDropHandler(editor: Editor) {
   });
 }
 
+// Boards open at the canvas origin. When no shape is in view there — e.g. a
+// board imported from Miro whose content sits far away — zoom out to show the
+// whole board instead of an empty canvas.
+function revealContentOnOpen(editor: Editor) {
+  editor.timers.requestAnimationFrame(() => {
+    const shapes = editor.getCurrentPageShapes();
+    if (shapes.length === 0) return;
+    const viewport = editor.getViewportPageBounds();
+    const anyInView = shapes.some(shape => {
+      const bounds = editor.getShapePageBounds(shape);
+      return !!bounds && viewport.collides(bounds);
+    });
+    if (!anyInView) editor.zoomToFit();
+  });
+}
+
 // Wires up board-specific editor behaviour. Pass directly to <Tldraw onMount>.
 export function setupBoardEditor(editor: Editor) {
   registerAssetCleanup(editor);
   registerImageDropHandler(editor);
+  revealContentOnOpen(editor);
 }
